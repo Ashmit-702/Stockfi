@@ -56,6 +56,8 @@ def get_price_history(ticker: str, days: int = 30) -> pd.DataFrame:
             df[col] = np.round(df[col].values.astype(np.float64), 2)
         df["Volume"] = df["Volume"].fillna(0).astype(np.int64)
         df["Date"] = df["Date"].astype(str)
+        # Replace NaN with None for JSON serialization
+        df = df.where(pd.notnull(df), None)
         return df.reset_index(drop=True)
     except Exception as e:
         print(f"[yFinance] Error {yticker}: {e}")
