@@ -1,23 +1,29 @@
 """
-dashboard/app.py - Plotly Dash live dashboard for SentiFi
-Mounted inside FastAPI using WSGIMiddleware.
+dashboard/app.py - SentiFi India Dashboard
+Plotly Dash dashboard focused on Indian stock market sentiment.
 """
 
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 import dash
 from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
+import os
 
 SIGNAL_COLORS = {"BUY": "#00C896", "SELL": "#FF4C61", "HOLD": "#F5A623"}
+
+# Popular Indian stocks for quick buttons
+INDIAN_STOCKS = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "WIPRO",
+    "TATAMOTORS", "ADANIENT", "BAJFINANCE", "SBIN", "ICICIBANK",
+]
 
 dash_app = dash.Dash(
     __name__,
     requests_pathname_prefix="/dashboard/",
     external_stylesheets=[dbc.themes.DARKLY],
-    title="SentiFi — AI Market Sentiment",
+    title="SentiFi India — AI Market Sentiment",
 )
 
 dash_app.layout = dbc.Container(
@@ -27,20 +33,38 @@ dash_app.layout = dbc.Container(
         # Header
         dbc.Row([
             dbc.Col([
-                html.H1("📈 SentiFi", style={"color": "#00C896", "fontFamily": "monospace", "fontWeight": 800}),
-                html.P("AI-powered market sentiment from Reddit & Twitter", style={"color": "#8B949E"}),
+                html.H1("📈 SentiFi India",
+                        style={"color": "#00C896", "fontFamily": "monospace", "fontWeight": 800}),
+                html.P("AI-powered sentiment analysis for Indian & global stocks · NSE/BSE · Reddit · Twitter",
+                       style={"color": "#8B949E"}),
             ])
-        ], className="mb-4"),
+        ], className="mb-3"),
+
+        # Quick pick Indian stocks
+        dbc.Row([
+            dbc.Col([
+                html.P("Quick Pick:", style={"color": "#8B949E", "marginBottom": "6px", "fontSize": "0.85rem"}),
+                html.Div([
+                    dbc.Button(s, id=f"quick-{s}", size="sm", outline=True, color="success",
+                               style={"marginRight": "6px", "marginBottom": "6px", "fontFamily": "monospace"})
+                    for s in INDIAN_STOCKS
+                ])
+            ])
+        ], className="mb-3"),
 
         # Search bar
         dbc.Row([
             dbc.Col([
                 dbc.InputGroup([
-                    dbc.Input(id="ticker-input", placeholder="Enter ticker e.g. AAPL, TSLA, NVDA",
-                              type="text", style={"backgroundColor": "#161B22", "color": "#E6EDF3", "border": "1px solid #30363D"}),
+                    dbc.Input(
+                        id="ticker-input",
+                        placeholder="Enter ticker: RELIANCE, TCS, INFY, AAPL... (Indian stocks auto-get .NS)",
+                        type="text",
+                        style={"backgroundColor": "#161B22", "color": "#E6EDF3", "border": "1px solid #30363D"}
+                    ),
                     dbc.Button("Analyze", id="analyze-btn", color="success", n_clicks=0),
                 ])
-            ], width=6),
+            ], width=8),
             dbc.Col([
                 dbc.Checklist(
                     options=[{"label": "Reddit", "value": "reddit"}, {"label": "Twitter/X", "value": "twitter"}],
@@ -49,19 +73,17 @@ dash_app.layout = dbc.Container(
                     inline=True,
                     style={"color": "#E6EDF3", "marginTop": "8px"},
                 )
-            ], width=3),
+            ], width=4),
         ], className="mb-4"),
 
-        # Loading spinner
+        # Loading
         dcc.Loading(
-            id="loading",
-            type="circle",
-            color="#00C896",
+            id="loading", type="circle", color="#00C896",
             children=html.Div(id="dashboard-content"),
         ),
 
-        # Store
         dcc.Store(id="analysis-store"),
+        dcc.Store(id="clicked-stock", data=""),
     ]
 )
 
@@ -69,44 +91,39 @@ dash_app.layout = dbc.Container(
 def make_signal_card(signal_data: dict) -> dbc.Card:
     sig = signal_data.get("signal", "HOLD")
     color = SIGNAL_COLORS.get(sig, "#F5A623")
-    return dbc.Card(
-        dbc.CardBody([
-            html.H2(sig, style={"color": color, "fontFamily": "monospace", "fontWeight": 900, "fontSize": "3rem"}),
-            html.P(f"Weighted Score: {signal_data.get('weighted_score', 0):+.4f}", style={"color": "#E6EDF3"}),
-            html.P(f"Posts Analyzed: {signal_data.get('post_count', 0)}", style={"color": "#8B949E"}),
-            html.P(f"Confidence: {signal_data.get('confidence', 0)*100:.1f}%", style={"color": "#8B949E"}),
-            html.Hr(style={"borderColor": "#30363D"}),
-            html.P(signal_data.get("reasoning", ""), style={"color": "#8B949E", "fontSize": "0.85rem"}),
-        ]),
-        style={"backgroundColor": "#161B22", "border": f"1px solid {color}"},
-    )
+    return dbc.Card(dbc.CardBody([
+        html.H2(sig, style={"color": color, "fontFamily": "monospace", "fontWeight": 900, "fontSize": "3rem"}),
+        html.P(f"Weighted Score: {signal_data.get('weighted_score', 0):+.4f}", style={"color": "#E6EDF3"}),
+        html.P(f"Posts Analyzed: {signal_data.get('post_count', 0)}", style={"color": "#8B949E"}),
+        html.P(f"Confidence: {signal_data.get('confidence', 0)*100:.1f}%", style={"color": "#8B949E"}),
+        html.Hr(style={"borderColor": "#30363D"}),
+        html.P(signal_data.get("reasoning", ""), style={"color": "#8B949E", "fontSize": "0.85rem"}),
+    ]), style={"backgroundColor": "#161B22", "border": f"1px solid {color}"})
 
 
 def make_sentiment_pie(label_dist: dict) -> go.Figure:
     labels = list(label_dist.keys())
     values = list(label_dist.values())
-    colors = ["#00C896", "#8B949E", "#FF4C61"]
     fig = go.Figure(go.Pie(
         labels=labels, values=values,
-        marker=dict(colors=colors),
-        hole=0.5,
-        textfont=dict(color="#E6EDF3"),
+        marker=dict(colors=["#00C896", "#8B949E", "#FF4C61"]),
+        hole=0.5, textfont=dict(color="#E6EDF3"),
     ))
     fig.update_layout(
         paper_bgcolor="#161B22", plot_bgcolor="#161B22",
         font=dict(color="#E6EDF3"),
         margin=dict(t=20, b=20, l=20, r=20),
         legend=dict(font=dict(color="#E6EDF3")),
-        showlegend=True,
     )
     return fig
 
 
-def make_price_chart(prices: list) -> go.Figure:
+def make_price_chart(prices: list, currency: str = "INR") -> go.Figure:
     if not prices:
         return go.Figure()
     df = pd.DataFrame(prices)
     df["Date"] = pd.to_datetime(df["Date"])
+    symbol = "₹" if currency == "INR" else "$"
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
         x=df["Date"],
@@ -119,8 +136,8 @@ def make_price_chart(prices: list) -> go.Figure:
     fig.update_layout(
         paper_bgcolor="#161B22", plot_bgcolor="#0D1117",
         font=dict(color="#E6EDF3"),
-        xaxis=dict(gridcolor="#21262D", showgrid=True),
-        yaxis=dict(gridcolor="#21262D", showgrid=True),
+        xaxis=dict(gridcolor="#21262D"),
+        yaxis=dict(gridcolor="#21262D", tickprefix=symbol),
         margin=dict(t=20, b=20, l=20, r=20),
         xaxis_rangeslider_visible=False,
     )
@@ -130,29 +147,35 @@ def make_price_chart(prices: list) -> go.Figure:
 def make_source_bar(reddit_score, twitter_score) -> go.Figure:
     sources, scores, colors = [], [], []
     if reddit_score is not None:
-        sources.append("Reddit")
-        scores.append(reddit_score)
-        colors.append("#FF6314")
+        sources.append("Reddit"); scores.append(reddit_score); colors.append("#FF6314")
     if twitter_score is not None:
-        sources.append("Twitter/X")
-        scores.append(twitter_score)
-        colors.append("#1DA1F2")
-
+        sources.append("Twitter/X"); scores.append(twitter_score); colors.append("#1DA1F2")
     fig = go.Figure(go.Bar(
-        x=sources, y=scores,
-        marker_color=colors,
-        text=[f"{s:+.3f}" for s in scores],
-        textposition="auto",
+        x=sources, y=scores, marker_color=colors,
+        text=[f"{s:+.3f}" for s in scores], textposition="auto",
     ))
     fig.update_layout(
         paper_bgcolor="#161B22", plot_bgcolor="#0D1117",
         font=dict(color="#E6EDF3"),
         yaxis=dict(range=[-1, 1], gridcolor="#21262D"),
         margin=dict(t=20, b=20, l=20, r=20),
-        showlegend=False,
     )
     fig.add_hline(y=0, line_color="#8B949E", line_dash="dot")
     return fig
+
+
+# Quick stock button callbacks
+@dash_app.callback(
+    Output("ticker-input", "value"),
+    [Input(f"quick-{s}", "n_clicks") for s in INDIAN_STOCKS],
+    prevent_initial_call=True,
+)
+def set_ticker(*args):
+    from dash import ctx
+    if not ctx.triggered:
+        return ""
+    btn_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    return btn_id.replace("quick-", "")
 
 
 @dash_app.callback(
@@ -169,12 +192,12 @@ def run_analysis(n_clicks, ticker, sources):
 
     ticker = ticker.upper().strip()
     sources_str = ",".join(sources) if sources else "reddit"
+    base = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
 
     try:
-        # Call the FastAPI backend
-        import os
-        base = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
-        analysis = requests.get(f"{base}/analyze/{ticker}?sources={sources_str}&limit=50", timeout=120).json()
+        analysis = requests.get(
+            f"{base}/analyze/{ticker}?sources={sources_str}&limit=50", timeout=120
+        ).json()
         stock = requests.get(f"{base}/stock/{ticker}?days=30", timeout=30).json()
     except Exception as e:
         return dbc.Alert(f"API Error: {str(e)}", color="danger"), {}
@@ -182,53 +205,67 @@ def run_analysis(n_clicks, ticker, sources):
     prices = stock.get("prices", [])
     info = stock.get("info", {})
     stats = stock.get("stats", {})
+    currency = info.get("currency", "USD")
+    symbol = "₹" if currency == "INR" else "$"
 
     content = [
-        # Stock info bar
+        # Stock info
         dbc.Row([
-            dbc.Col(html.H4(f"{info.get('name', ticker)} ({ticker})", style={"color": "#E6EDF3"})),
-            dbc.Col(html.P(f"Sector: {info.get('sector', 'N/A')} | Current: ${info.get('current_price', 'N/A')} | PE: {info.get('pe_ratio', 'N/A')}",
-                           style={"color": "#8B949E", "textAlign": "right"})),
+            dbc.Col(html.H4(f"{info.get('name', ticker)} ({ticker})",
+                            style={"color": "#E6EDF3"})),
+            dbc.Col(html.P(
+                f"Sector: {info.get('sector', 'N/A')} | "
+                f"Price: {info.get('current_price', 'N/A')} | "
+                f"MCap: {info.get('market_cap', 'N/A')} | "
+                f"Exchange: {info.get('exchange', 'N/A')}",
+                style={"color": "#8B949E", "textAlign": "right", "fontSize": "0.85rem"}
+            )),
         ], className="mb-3"),
 
-        # Signal + Pie
+        # Signal + Pie + Source bar
         dbc.Row([
             dbc.Col(make_signal_card(analysis), width=4),
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.H6("Sentiment Distribution", style={"color": "#8B949E"}),
-                dcc.Graph(figure=make_sentiment_pie(analysis.get("label_distribution", {})), style={"height": "220px"}),
+                dcc.Graph(figure=make_sentiment_pie(analysis.get("label_distribution", {})),
+                          style={"height": "220px"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=4),
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.H6("Score by Source", style={"color": "#8B949E"}),
-                dcc.Graph(figure=make_source_bar(analysis.get("reddit_score"), analysis.get("twitter_score")), style={"height": "220px"}),
+                dcc.Graph(figure=make_source_bar(
+                    analysis.get("reddit_score"), analysis.get("twitter_score")),
+                    style={"height": "220px"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=4),
         ], className="mb-4"),
 
         # Price chart
         dbc.Row([
             dbc.Col(dbc.Card(dbc.CardBody([
-                html.H6(f"30-Day Price Chart | Volatility: {stats.get('volatility_pct', 'N/A')}%", style={"color": "#8B949E"}),
-                dcc.Graph(figure=make_price_chart(prices), style={"height": "350px"}),
+                html.H6(
+                    f"30-Day Price Chart ({currency}) | Volatility: {stats.get('volatility_pct', 'N/A')}%",
+                    style={"color": "#8B949E"}
+                ),
+                dcc.Graph(figure=make_price_chart(prices, currency), style={"height": "350px"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"})),
         ], className="mb-4"),
 
-        # Stats row
+        # Stats
         dbc.Row([
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.P("Avg Price", style={"color": "#8B949E", "marginBottom": "4px"}),
-                html.H5(f"${stats.get('mean_price', 'N/A')}", style={"color": "#E6EDF3"}),
+                html.H5(f"{symbol}{stats.get('mean_price', 'N/A')}", style={"color": "#E6EDF3"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=3),
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.P("52W High", style={"color": "#8B949E", "marginBottom": "4px"}),
-                html.H5(f"${info.get('52w_high', 'N/A')}", style={"color": "#00C896"}),
+                html.H5(f"{info.get('52w_high', 'N/A')}", style={"color": "#00C896"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=3),
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.P("52W Low", style={"color": "#8B949E", "marginBottom": "4px"}),
-                html.H5(f"${info.get('52w_low', 'N/A')}", style={"color": "#FF4C61"}),
+                html.H5(f"{info.get('52w_low', 'N/A')}", style={"color": "#FF4C61"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=3),
             dbc.Col(dbc.Card(dbc.CardBody([
-                html.P("Price Range (30d)", style={"color": "#8B949E", "marginBottom": "4px"}),
-                html.H5(f"${stats.get('price_range', 'N/A')}", style={"color": "#E6EDF3"}),
+                html.P("Volatility (30d)", style={"color": "#8B949E", "marginBottom": "4px"}),
+                html.H5(f"{stats.get('volatility_pct', 'N/A')}%", style={"color": "#E6EDF3"}),
             ]), style={"backgroundColor": "#161B22", "border": "1px solid #30363D"}), width=3),
         ]),
     ]
