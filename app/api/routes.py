@@ -1,12 +1,12 @@
 """
-api/routes.py - FastAPI REST endpoints for SentiFi
-All endpoints are async and production-ready.
+api/routes.py - FastAPI routes with parallel scraping for speed
 """
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.db import get_db, SentimentRecord, SignalRecord
 from app.scraper.reddit import scrape_reddit
@@ -26,64 +26,78 @@ def health_check():
 @router.get("/analyze/{ticker}")
 def analyze_ticker(
     ticker: str,
-    sources: str = Query(default="reddit,twitter", description="Comma-separated: reddit,twitter"),
-    limit: int = Query(default=50, ge=5, le=200),
+    sources: str = Query(default="reddit,twitter"),
+    limit: int = Query(default=40, ge=5, le=100),
     db: Session = Depends(get_db),
 ):
-    """
-    Main endpoint: scrape + analyze + return signal for a ticker.
-    
-    Example: GET /analyze/AAPL?sources=reddit,twitter&limit=50
-    """
     ticker = ticker.upper()
     source_list = [s.strip().lower() for s in sources.split(",")]
-
     frames = []
 
-    if "reddit" in source_list:
-        reddit_df = scrape_reddit(ticker, limit=limit)
-        if not reddit_df.empty:
-            frames.append(reddit_df)
+    # Scrape sources in parallel
+    def fetch_reddit():
+        return scrape_reddit(ticker, limit=limit)
 
-    if "twitter" in source_list:
-        twitter_df = scrape_twitter(ticker, limit=limit)
-        if not twitter_df.empty:
-            frames.append(twitter_df)
+    def fetch_twitter():
+        return scrape_twitter(ticker, limit=limit)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {}
+        if "reddit" in source_list:
+            futures["reddit"] = executor.submit(fetch_reddit)
+        if "twitter" in source_list:
+            futures["twitter"] = executor.submit(fetch_twitter)
+
+        for name, future in futures.items():
+            try:
+                df = future.result(timeout=35)
+                if not df.empty:
+                    frames.append(df)
+            except Exception as e:
+                print(f"[API] {name} fetch failed: {e}")
 
     if not frames:
-        raise HTTPException(status_code=404, detail=f"No posts found for ${ticker}.")
+        # Return neutral HOLD with 0 posts instead of 404
+        return {
+            "ticker": ticker,
+            "signal": "HOLD",
+            "avg_score": 0.0,
+            "weighted_score": 0.0,
+            "confidence": 0.0,
+            "post_count": 0,
+            "reddit_score": None,
+            "twitter_score": None,
+            "label_distribution": {"positive": 0, "neutral": 1, "negative": 0},
+            "reasoning": f"No posts found for ${ticker}. Try a more popular ticker or check back later.",
+        }
 
     combined_df = pd.concat(frames, ignore_index=True)
     analyzed_df = analyze_dataframe(combined_df)
 
-    # Save to DB
-    for _, row in analyzed_df.iterrows():
-        record = SentimentRecord(
-            ticker=ticker,
-            source=row["source"],
-            text=row["text"][:1000],
-            score=row["score"],
-            label=row["label"],
-            confidence=row["confidence"],
-        )
-        db.add(record)
-    db.commit()
+    # Save to DB (batch)
+    try:
+        for _, row in analyzed_df.iterrows():
+            db.add(SentimentRecord(
+                ticker=ticker, source=row["source"],
+                text=row["text"][:500], score=row["score"],
+                label=row["label"], confidence=row["confidence"],
+            ))
+        db.commit()
+    except Exception as e:
+        print(f"[DB] Save error: {e}")
 
-    # Compute signal
     signal = compute_signal(analyzed_df, ticker)
 
-    # Save signal
-    sig_record = SignalRecord(
-        ticker=ticker,
-        signal=signal.signal,
-        avg_score=signal.avg_score,
-        weighted_score=signal.weighted_score,
-        post_count=signal.post_count,
-        reddit_score=signal.reddit_score,
-        twitter_score=signal.twitter_score,
-    )
-    db.add(sig_record)
-    db.commit()
+    try:
+        db.add(SignalRecord(
+            ticker=ticker, signal=signal.signal,
+            avg_score=signal.avg_score, weighted_score=signal.weighted_score,
+            post_count=signal.post_count, reddit_score=signal.reddit_score,
+            twitter_score=signal.twitter_score,
+        ))
+        db.commit()
+    except Exception as e:
+        print(f"[DB] Signal save error: {e}")
 
     return {
         "ticker": ticker,
@@ -104,66 +118,43 @@ def stock_data(
     ticker: str,
     days: int = Query(default=30, ge=1, le=365),
 ):
-    """
-    Fetch historical stock price data + summary stats.
-    
-    Example: GET /stock/AAPL?days=30
-    """
     ticker = ticker.upper()
     df = get_price_history(ticker, days=days)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail=f"No price data found for {ticker}.")
-
     info = get_ticker_info(ticker)
-    stats = get_summary_stats(df)
+    stats = get_summary_stats(df) if not df.empty else {}
 
     return {
         "ticker": ticker,
         "info": info,
         "stats": stats,
-        "prices": df.to_dict(orient="records"),
+        "prices": df.to_dict(orient="records") if not df.empty else [],
     }
 
 
 @router.get("/history/{ticker}")
 def sentiment_history(
     ticker: str,
-    limit: int = Query(default=100, ge=10, le=500),
+    limit: int = Query(default=100),
     db: Session = Depends(get_db),
 ):
-    """
-    Fetch stored sentiment records for a ticker from DB.
-    
-    Example: GET /history/AAPL?limit=100
-    """
     ticker = ticker.upper()
     records = (
         db.query(SentimentRecord)
         .filter(SentimentRecord.ticker == ticker)
         .order_by(SentimentRecord.created_at.desc())
-        .limit(limit)
-        .all()
+        .limit(limit).all()
     )
-
     if not records:
-        raise HTTPException(status_code=404, detail=f"No history found for {ticker}.")
+        return {"ticker": ticker, "total_records": 0, "records": []}
 
     df = pd.DataFrame([{
-        "text": r.text,
-        "source": r.source,
-        "score": r.score,
-        "label": r.label,
-        "confidence": r.confidence,
-        "created_at": r.created_at,
+        "text": r.text, "source": r.source, "score": r.score,
+        "label": r.label, "confidence": r.confidence, "created_at": r.created_at,
     } for r in records])
-
-    rolling = rolling_sentiment(df, window="6h")
 
     return {
         "ticker": ticker,
         "total_records": len(records),
-        "rolling_sentiment": rolling.to_dict(orient="records"),
         "records": df.head(50).to_dict(orient="records"),
     }
 
@@ -171,32 +162,21 @@ def sentiment_history(
 @router.get("/signals/{ticker}")
 def signal_history(
     ticker: str,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20),
     db: Session = Depends(get_db),
 ):
-    """
-    Fetch past signals generated for a ticker.
-    
-    Example: GET /signals/AAPL
-    """
     ticker = ticker.upper()
     signals = (
         db.query(SignalRecord)
         .filter(SignalRecord.ticker == ticker)
         .order_by(SignalRecord.created_at.desc())
-        .limit(limit)
-        .all()
+        .limit(limit).all()
     )
-
     return {
         "ticker": ticker,
         "signals": [{
-            "signal": s.signal,
-            "avg_score": s.avg_score,
-            "weighted_score": s.weighted_score,
-            "post_count": s.post_count,
-            "reddit_score": s.reddit_score,
-            "twitter_score": s.twitter_score,
+            "signal": s.signal, "avg_score": s.avg_score,
+            "weighted_score": s.weighted_score, "post_count": s.post_count,
             "created_at": s.created_at,
         } for s in signals]
     }
