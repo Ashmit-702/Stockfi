@@ -136,7 +136,7 @@ dash_app.layout = html.Div(
                     ),
                     dbc.Checklist(
                         options=[
-                            {"label": "Reddit", "value": "reddit"},
+                            {"label": "News (ET/MC)", "value": "reddit"},
                             {"label": "Twitter/X", "value": "twitter"},
                         ],
                         value=["reddit", "twitter"],
@@ -295,7 +295,7 @@ def make_sentiment_donut(label_dist):
 def make_source_bar(reddit_score, twitter_score):
     sources, scores, colors = [], [], []
     if reddit_score is not None:
-        sources.append("Reddit"); scores.append(reddit_score); colors.append("#FF6314")
+        sources.append("News (ET/MC)"); scores.append(reddit_score); colors.append("#FF6314")
     if twitter_score is not None:
         sources.append("Twitter / X"); scores.append(twitter_score); colors.append("#1DA1F2")
 
