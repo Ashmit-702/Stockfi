@@ -66,31 +66,44 @@ def get_price_history(ticker: str, days: int = 30) -> pd.DataFrame:
 
 def get_ticker_info(ticker: str) -> dict:
     yticker = normalize_ticker(ticker)
+    currency = "INR" if yticker.endswith(".NS") else "USD"
+    sym = "₹" if currency == "INR" else "$"
     try:
-        info = yf.Ticker(yticker).info
-        currency = info.get("currency", "USD")
-        sym = "₹" if currency == "INR" else "$"
-        mc = info.get("marketCap")
+        stock = yf.Ticker(yticker)
+        fi = stock.fast_info
+        high52 = getattr(fi, "year_high", None)
+        low52 = getattr(fi, "year_low", None)
+        price = getattr(fi, "last_price", None)
+        mc = getattr(fi, "market_cap", None)
         if mc and currency == "INR":
             mc_display = f"₹{round(mc/1e7):,} Cr"
         elif mc:
             mc_display = f"${mc/1e9:.1f}B"
         else:
             mc_display = "N/A"
+        try:
+            info = stock.info
+            name = info.get("longName") or info.get("shortName") or ticker
+            sector = info.get("sector") or info.get("industry") or "N/A"
+            pe = round(info.get("trailingPE", 0), 2) if info.get("trailingPE") else "N/A"
+        except:
+            name = ticker
+            sector = "N/A"
+            pe = "N/A"
         return {
-            "name": info.get("longName", ticker),
-            "sector": info.get("sector", "N/A"),
+            "name": name,
+            "sector": sector,
             "market_cap": mc_display,
-            "current_price": f"{sym}{info.get('currentPrice', info.get('regularMarketPrice', 'N/A'))}",
-            "52w_high": f"{sym}{info.get('fiftyTwoWeekHigh', 'N/A')}",
-            "52w_low": f"{sym}{info.get('fiftyTwoWeekLow', 'N/A')}",
-            "pe_ratio": round(info.get("trailingPE", 0), 2) if info.get("trailingPE") else "N/A",
+            "current_price": f"{sym}{round(price, 2)}" if price else "N/A",
+            "52w_high": f"{sym}{round(high52, 2)}" if high52 else "N/A",
+            "52w_low": f"{sym}{round(low52, 2)}" if low52 else "N/A",
+            "pe_ratio": pe,
             "currency": currency,
-            "exchange": info.get("exchange", "NSE"),
+            "exchange": "NSE" if yticker.endswith(".NS") else "BSE" if yticker.endswith(".BO") else "NYSE/NASDAQ",
         }
     except Exception as e:
         print(f"[Info] Error {yticker}: {e}")
-        return {"name": ticker, "currency": "INR" if yticker.endswith(".NS") else "USD"}
+        return {"name": ticker, "currency": currency, "exchange": "NSE"}
 
 
 def get_summary_stats(df: pd.DataFrame) -> dict:
