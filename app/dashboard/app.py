@@ -367,7 +367,7 @@ def run_analysis(n_clicks, ticker, sources):
             html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end"}, children=[
                 html.Div([
                     html.Div(info.get("name", ticker), style={
-                        "fontSize": "22px", "fontWeight": "700", "color": "#E2E8F0", "marginBottom": "4px"
+                        "fontSize": "18px", "fontWeight": "700", "color": "#E2E8F0", "marginBottom": "4px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "maxWidth": "600px"
                     }),
                     html.Div(style={"display": "flex", "gap": "20px"}, children=[
                         html.Span(ticker, style={"color": "#00D4AA", "fontFamily": "JetBrains Mono", "fontSize": "13px", "fontWeight": "600"}),
