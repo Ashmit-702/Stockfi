@@ -101,22 +101,21 @@ dash_app.layout = html.Div(
 
             # Search row
             html.Div(style={"marginBottom": "20px"}, children=[
-                html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center", "width": "100%", "overflow": "hidden"}, children=[
+                html.Div(style={"display": "flex", "gap": "10px", "marginBottom": "10px"}, children=[
                     dcc.Input(
                         id="ticker-input",
-                        placeholder="e.g. RELIANCE, TCS, HDFCBANK, AAPL",
+                        placeholder="e.g. RELIANCE  ·  TCS  ·  HDFCBANK  ·  AAPL",
                         type="text",
                         debounce=False,
                         style={
                             "flex": "1",
                             "minWidth": "0",
-                            "width": "100%",
                             "backgroundColor": "#1A2035",
                             "border": "1px solid #2D3A52",
                             "borderRadius": "6px",
                             "color": "#FFFFFF",
-                            "padding": "12px 16px",
-                            "fontSize": "15px",
+                            "padding": "11px 16px",
+                            "fontSize": "14px",
                             "fontFamily": "Inter, sans-serif",
                             "outline": "none",
                         }
@@ -126,18 +125,23 @@ dash_app.layout = html.Div(
                         id="analyze-btn",
                         n_clicks=0,
                         style={
+                            "flexShrink": "0",
                             "backgroundColor": "#00D4AA",
                             "color": "#0B0F1A",
                             "border": "none",
                             "borderRadius": "6px",
-                            "padding": "12px 28px",
+                            "padding": "11px 28px",
                             "fontSize": "13px",
                             "fontWeight": "700",
                             "letterSpacing": "0.1em",
                             "cursor": "pointer",
                             "fontFamily": "Inter, sans-serif",
+                            "whiteSpace": "nowrap",
                         }
                     ),
+                ]),
+                html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center"}, children=[
+                    html.Span("Sources:", style={"color": "#4A5568", "fontSize": "12px"}),
                     dbc.Checklist(
                         options=[
                             {"label": "News (ET/MC)", "value": "reddit"},
@@ -146,12 +150,12 @@ dash_app.layout = html.Div(
                         value=["reddit", "twitter"],
                         id="source-toggle",
                         inline=True,
-                        style={"color": "#718096", "fontSize": "13px", "whiteSpace": "nowrap"},
+                        style={"color": "#A0AEC0", "fontSize": "13px"},
                     ),
                 ]),
             ]),
 
-            # Quick picks
+                        # Quick picks
             html.Div(style={"marginBottom": "28px"}, children=[
                 html.Div("NSE TOP PICKS", style=LABEL_STYLE),
                 html.Div(
