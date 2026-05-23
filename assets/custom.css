@@ -1,9 +1,12 @@
-/* Force input text to be white */
+/* Input text - white and fully visible */
 #ticker-input {
     color: #FFFFFF !important;
     background-color: #1A2035 !important;
     caret-color: #00D4AA !important;
     border: 1px solid #2D3A52 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
 }
 
 #ticker-input::placeholder {
@@ -17,7 +20,6 @@
     box-shadow: 0 0 0 2px rgba(0,212,170,0.15) !important;
 }
 
-/* Nuclear option - all text inputs white */
 input, input[type="text"] {
     color: #FFFFFF !important;
     -webkit-text-fill-color: #FFFFFF !important;
@@ -25,4 +27,12 @@ input, input[type="text"] {
 
 body {
     background-color: #0B0F1A !important;
+}
+
+/* Fix search row to not overflow */
+.search-row {
+    display: flex !important;
+    width: 100% !important;
+    gap: 12px !important;
+    align-items: center !important;
 }

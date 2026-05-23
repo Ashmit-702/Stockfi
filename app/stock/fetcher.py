@@ -32,15 +32,23 @@ INDIAN_TICKERS = {
 }
 
 # Ticker name aliases — maps common search terms to NSE symbols
+# Maps user input → correct NSE yFinance symbol
 TICKER_ALIASES = {
+    # National Aluminium — yFinance uses NATIONALUM.NS directly
     "NATIONALALU": "NATIONALUM",
+    "NATALU": "NATIONALUM",
+    "NALCO": "NATIONALUM",
     "NALU": "NATIONALUM",
-    "STATEBANKOFIN": "SBIN",
+    # Common shortcuts
     "STATEBANK": "SBIN",
+    "STATEBANKOFIN": "SBIN",
     "TATASTL": "TATASTEEL",
     "BAJAJFIN": "BAJFINANCE",
     "HDFCBK": "HDFCBANK",
     "ICICI": "ICICIBANK",
+    "BAJAJFINANCE": "BAJFINANCE",
+    "ADANI": "ADANIENT",
+    "ZOMATO": "ZOMATO",
 }
 
 
@@ -69,8 +77,10 @@ def get_price_history(ticker: str, days: int = 30) -> pd.DataFrame:
         candidates = [f"{t}.NS", f"{t}.BO", t]
 
     for yticker in candidates:
+        print(f"[Fetcher] Trying {yticker}")
         df = _download(yticker, days)
         if not df.empty:
+            print(f"[Fetcher] Got data from {yticker}")
             return df
 
     return pd.DataFrame()

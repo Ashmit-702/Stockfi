@@ -101,14 +101,16 @@ dash_app.layout = html.Div(
 
             # Search row
             html.Div(style={"marginBottom": "20px"}, children=[
-                html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center"}, children=[
+                html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center", "width": "100%", "overflow": "hidden"}, children=[
                     dcc.Input(
                         id="ticker-input",
-                        placeholder="Ticker: RELIANCE, TCS, HDFCBANK, NATIONALUM, AAPL...",
+                        placeholder="e.g. RELIANCE, TCS, HDFCBANK, AAPL",
                         type="text",
                         debounce=False,
                         style={
                             "flex": "1",
+                            "minWidth": "0",
+                            "width": "100%",
                             "backgroundColor": "#1A2035",
                             "border": "1px solid #2D3A52",
                             "borderRadius": "6px",
