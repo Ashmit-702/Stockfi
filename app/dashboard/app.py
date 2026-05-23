@@ -318,17 +318,92 @@ def make_source_bar(reddit_score, twitter_score):
     return fig
 
 
-# Quick pick callbacks
+def _do_analysis(ticker, sources):
+    if not ticker:
+        return html.Div("Enter a ticker symbol above to begin analysis.",
+                        style={"color": "#4A5568", "textAlign": "center", "padding": "60px", "fontSize": "14px"}), {}
+    ticker = ticker.upper().strip()
+    sources_str = ",".join(sources) if sources else "reddit"
+    base = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    try:
+        analysis = requests.get(f"{base}/analyze/{ticker}?sources={sources_str}&limit=50", timeout=120).json()
+        stock = requests.get(f"{base}/stock/{ticker}?days=30", timeout=30).json()
+    except Exception as e:
+        return html.Div(f"Error: {str(e)}", style={"color": "#FF4757", "padding": "20px"}), {}
+    prices = stock.get("prices", [])
+    info = stock.get("info", {})
+    stats = stock.get("stats", {})
+    currency = info.get("currency", "USD")
+    symbol = "\u20b9" if currency == "INR" else "$"
+    content = html.Div([
+        html.Div(style={"marginBottom": "20px", "paddingBottom": "16px", "borderBottom": "1px solid #1E2636"}, children=[
+            html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end"}, children=[
+                html.Div([
+                    html.Div(info.get("name", ticker), style={
+                        "fontSize": "18px", "fontWeight": "700", "color": "#E2E8F0",
+                        "marginBottom": "4px", "whiteSpace": "nowrap", "overflow": "hidden",
+                        "textOverflow": "ellipsis", "maxWidth": "600px"
+                    }),
+                    html.Div(style={"display": "flex", "gap": "20px"}, children=[
+                        html.Span(ticker, style={"color": "#00D4AA", "fontFamily": "JetBrains Mono", "fontSize": "13px", "fontWeight": "600"}),
+                        html.Span(info.get("exchange", ""), style={"color": "#4A5568", "fontSize": "12px"}),
+                        html.Span(info.get("sector", ""), style={"color": "#4A5568", "fontSize": "12px"}),
+                    ])
+                ]),
+                html.Div(style={"textAlign": "right"}, children=[
+                    html.Div(str(info.get("current_price", "N/A")), style={
+                        "fontSize": "28px", "fontWeight": "700", "color": "#E2E8F0", "fontFamily": "JetBrains Mono",
+                    }),
+                    html.Div(f"MCap: {info.get('market_cap', 'N/A')} \u00b7 PE: {info.get('pe_ratio', 'N/A')}",
+                             style={"color": "#4A5568", "fontSize": "12px"}),
+                ]),
+            ]),
+        ]),
+        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "16px", "marginBottom": "16px"}, children=[
+            make_signal_card(analysis),
+            html.Div(style=CARD_STYLE, children=[
+                html.Div(style={"padding": "16px 20px 8px"}, children=[html.Div("SENTIMENT BREAKDOWN", style=LABEL_STYLE)]),
+                dcc.Graph(figure=make_sentiment_donut(analysis.get("label_distribution", {})), style={"height": "240px"}, config={"displayModeBar": False}),
+            ]),
+            html.Div(style=CARD_STYLE, children=[
+                html.Div(style={"padding": "16px 20px 8px"}, children=[html.Div("SCORE BY SOURCE", style=LABEL_STYLE)]),
+                dcc.Graph(figure=make_source_bar(analysis.get("reddit_score"), analysis.get("twitter_score")), style={"height": "240px"}, config={"displayModeBar": False}),
+            ]),
+        ]),
+        html.Div(style={**CARD_STYLE, "marginBottom": "16px"}, children=[
+            html.Div(style={"padding": "16px 20px 8px", "display": "flex", "justifyContent": "space-between"}, children=[
+                html.Div("30-DAY PRICE CHART", style=LABEL_STYLE),
+                html.Div(f"Volatility: {stats.get('volatility_pct', 'N/A')}%  \u00b7  Range: {symbol}{stats.get('min_price', 'N/A')} \u2014 {symbol}{stats.get('max_price', 'N/A')}",
+                         style={"color": "#4A5568", "fontSize": "11px", "fontFamily": "JetBrains Mono"}),
+            ]),
+            dcc.Graph(figure=make_price_chart(prices, currency), style={"height": "320px"}, config={"displayModeBar": False}),
+        ]),
+        html.Div(style={"display": "grid", "gridTemplateColumns": "repeat(4, 1fr)", "gap": "12px"}, children=[
+            stat_card("AVG PRICE (30D)", f"{symbol}{stats.get('mean_price', 'N/A')}"),
+            stat_card("52W HIGH", str(info.get("52w_high", "N/A")), "#00D4AA"),
+            stat_card("52W LOW", str(info.get("52w_low", "N/A")), "#FF4757"),
+            stat_card("VOLATILITY", f"{stats.get('volatility_pct', 'N/A')}%"),
+        ]),
+    ])
+    return content, analysis
+
+
 @dash_app.callback(
     Output("ticker-input", "value"),
+    Output("dashboard-content", "children", allow_duplicate=True),
+    Output("analysis-store", "data", allow_duplicate=True),
     [Input(f"quick-{t}", "n_clicks") for t, _ in INDIAN_STOCKS],
+    State("source-toggle", "value"),
     prevent_initial_call=True,
 )
-def set_ticker(*args):
+def quick_pick_and_analyze(*args):
     from dash import ctx
+    sources = args[-1]
     if not ctx.triggered:
-        return ""
-    return ctx.triggered[0]["prop_id"].split(".")[0].replace("quick-", "")
+        return dash.no_update, dash.no_update, dash.no_update
+    ticker = ctx.triggered[0]["prop_id"].split(".")[0].replace("quick-", "")
+    content, data = _do_analysis(ticker, sources or ["reddit", "twitter"])
+    return ticker, content, data
 
 
 @dash_app.callback(
@@ -340,89 +415,4 @@ def set_ticker(*args):
     prevent_initial_call=True,
 )
 def run_analysis(n_clicks, ticker, sources):
-    if not ticker:
-        return html.Div("Enter a ticker symbol above to begin analysis.",
-                        style={"color": "#4A5568", "textAlign": "center", "padding": "60px", "fontSize": "14px"}), {}
-
-    ticker = ticker.upper().strip()
-    sources_str = ",".join(sources) if sources else "reddit"
-    base = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
-
-    try:
-        analysis = requests.get(f"{base}/analyze/{ticker}?sources={sources_str}&limit=50", timeout=120).json()
-        stock = requests.get(f"{base}/stock/{ticker}?days=30", timeout=30).json()
-    except Exception as e:
-        return html.Div(f"Error: {str(e)}", style={"color": "#FF4757", "padding": "20px"}), {}
-
-    prices = stock.get("prices", [])
-    info = stock.get("info", {})
-    stats = stock.get("stats", {})
-    currency = info.get("currency", "USD")
-    symbol = "₹" if currency == "INR" else "$"
-
-    content = html.Div([
-
-        # Company header
-        html.Div(style={"marginBottom": "20px", "paddingBottom": "16px", "borderBottom": "1px solid #1E2636"}, children=[
-            html.Div(style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end"}, children=[
-                html.Div([
-                    html.Div(info.get("name", ticker), style={
-                        "fontSize": "18px", "fontWeight": "700", "color": "#E2E8F0", "marginBottom": "4px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "maxWidth": "600px"
-                    }),
-                    html.Div(style={"display": "flex", "gap": "20px"}, children=[
-                        html.Span(ticker, style={"color": "#00D4AA", "fontFamily": "JetBrains Mono", "fontSize": "13px", "fontWeight": "600"}),
-                        html.Span(info.get("exchange", ""), style={"color": "#4A5568", "fontSize": "12px"}),
-                        html.Span(info.get("sector", ""), style={"color": "#4A5568", "fontSize": "12px"}),
-                    ])
-                ]),
-                html.Div(style={"textAlign": "right"}, children=[
-                    html.Div(str(info.get("current_price", "N/A")), style={
-                        "fontSize": "28px", "fontWeight": "700",
-                        "color": "#E2E8F0", "fontFamily": "JetBrains Mono",
-                    }),
-                    html.Div(f"MCap: {info.get('market_cap', 'N/A')} · PE: {info.get('pe_ratio', 'N/A')}",
-                             style={"color": "#4A5568", "fontSize": "12px"}),
-                ]),
-            ]),
-        ]),
-
-        # Signal + charts row
-        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "16px", "marginBottom": "16px"}, children=[
-            make_signal_card(analysis),
-            html.Div(style=CARD_STYLE, children=[
-                html.Div(style={"padding": "16px 20px 8px"}, children=[
-                    html.Div("SENTIMENT BREAKDOWN", style=LABEL_STYLE),
-                ]),
-                dcc.Graph(figure=make_sentiment_donut(analysis.get("label_distribution", {})),
-                          style={"height": "240px"}, config={"displayModeBar": False}),
-            ]),
-            html.Div(style=CARD_STYLE, children=[
-                html.Div(style={"padding": "16px 20px 8px"}, children=[
-                    html.Div("SCORE BY SOURCE", style=LABEL_STYLE),
-                ]),
-                dcc.Graph(figure=make_source_bar(analysis.get("reddit_score"), analysis.get("twitter_score")),
-                          style={"height": "240px"}, config={"displayModeBar": False}),
-            ]),
-        ]),
-
-        # Price chart
-        html.Div(style={**CARD_STYLE, "marginBottom": "16px"}, children=[
-            html.Div(style={"padding": "16px 20px 8px", "display": "flex", "justifyContent": "space-between"}, children=[
-                html.Div("30-DAY PRICE CHART", style=LABEL_STYLE),
-                html.Div(f"Volatility: {stats.get('volatility_pct', 'N/A')}%  ·  Range: {symbol}{stats.get('min_price', 'N/A')} — {symbol}{stats.get('max_price', 'N/A')}",
-                         style={"color": "#4A5568", "fontSize": "11px", "fontFamily": "JetBrains Mono"}),
-            ]),
-            dcc.Graph(figure=make_price_chart(prices, currency),
-                      style={"height": "320px"}, config={"displayModeBar": False}),
-        ]),
-
-        # Stats row
-        html.Div(style={"display": "grid", "gridTemplateColumns": "repeat(4, 1fr)", "gap": "12px"}, children=[
-            stat_card("AVG PRICE (30D)", f"{symbol}{stats.get('mean_price', 'N/A')}"),
-            stat_card("52W HIGH", str(info.get("52w_high", "N/A")), "#00D4AA"),
-            stat_card("52W LOW", str(info.get("52w_low", "N/A")), "#FF4757"),
-            stat_card("VOLATILITY", f"{stats.get('volatility_pct', 'N/A')}%"),
-        ]),
-    ])
-
-    return content, analysis
+    return _do_analysis(ticker, sources or ["reddit", "twitter"])
