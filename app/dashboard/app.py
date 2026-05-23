@@ -37,6 +37,18 @@ dash_app = dash.Dash(
     title="SentiFi — Indian Market Intelligence",
 )
 
+# Global CSS to fix input text visibility and button hover
+dash_app.index_string = dash_app.index_string.replace(
+    "</head>",
+    """<style>
+    #ticker-input { color: #E2E8F0 !important; background-color: #131720 !important; caret-color: #00D4AA !important; }
+    #ticker-input::placeholder { color: #4A5568 !important; }
+    #ticker-input:focus { border-color: #00D4AA !important; outline: none !important; box-shadow: none !important; }
+    .quick-btn:hover { background-color: #00D4AA !important; color: #0B0F1A !important; border-color: #00D4AA !important; }
+    body { background-color: #0B0F1A !important; }
+    </style></head>"""
+)
+
 CARD_STYLE = {
     "backgroundColor": "#131720",
     "border": "1px solid #1E2636",
@@ -327,7 +339,7 @@ def _do_analysis(ticker, sources):
     base = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
     try:
         analysis = requests.get(f"{base}/analyze/{ticker}?sources={sources_str}&limit=50", timeout=120).json()
-        stock = requests.get(f"{base}/stock/{ticker}?days=30", timeout=30).json()
+        stock = requests.get(f"{base}/stock/{ticker}?days=30", timeout=60).json()
     except Exception as e:
         return html.Div(f"Error: {str(e)}", style={"color": "#FF4757", "padding": "20px"}), {}
     prices = stock.get("prices", [])
