@@ -41,11 +41,12 @@ dash_app = dash.Dash(
 dash_app.index_string = dash_app.index_string.replace(
     "</head>",
     """<style>
-    #ticker-input { color: #E2E8F0 !important; background-color: #131720 !important; caret-color: #00D4AA !important; }
-    #ticker-input::placeholder { color: #4A5568 !important; }
-    #ticker-input:focus { border-color: #00D4AA !important; outline: none !important; box-shadow: none !important; }
-    .quick-btn:hover { background-color: #00D4AA !important; color: #0B0F1A !important; border-color: #00D4AA !important; }
+    #ticker-input { color: #FFFFFF !important; background-color: #1A2035 !important; caret-color: #00D4AA !important; border: 1px solid #2D3A52 !important; }
+    #ticker-input::placeholder { color: #4A5568 !important; opacity: 1 !important; }
+    #ticker-input:focus { border-color: #00D4AA !important; outline: none !important; box-shadow: 0 0 0 2px rgba(0,212,170,0.2) !important; }
+    input[type=text] { color: #FFFFFF !important; }
     body { background-color: #0B0F1A !important; }
+    * { box-sizing: border-box; }
     </style></head>"""
 )
 
@@ -113,20 +114,21 @@ dash_app.layout = html.Div(
             # Search row
             html.Div(style={"marginBottom": "20px"}, children=[
                 html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center"}, children=[
-                    dcc.Input(
+                    html.Input(
                         id="ticker-input",
-                        placeholder="Ticker symbol: RELIANCE, TCS, HDFCBANK, NATIONALUM, AAPL...",
+                        placeholder="Ticker: RELIANCE, TCS, HDFCBANK, NATIONALUM, AAPL...",
                         type="text",
                         style={
                             "flex": "1",
-                            "backgroundColor": "#131720",
-                            "border": "1px solid #1E2636",
+                            "backgroundColor": "#1A2035",
+                            "border": "1px solid #2D3A52",
                             "borderRadius": "6px",
-                            "color": "#E2E8F0",
+                            "color": "#FFFFFF",
                             "padding": "12px 16px",
-                            "fontSize": "14px",
+                            "fontSize": "15px",
                             "fontFamily": "Inter, sans-serif",
                             "outline": "none",
+                            "caretColor": "#00D4AA",
                         }
                     ),
                     html.Button(

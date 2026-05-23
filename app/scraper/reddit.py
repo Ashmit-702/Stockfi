@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 # Map tickers to search terms for better matching
 TICKER_NAMES = {
+    "NATIONALUM": "National Aluminium NALCO",
     "RELIANCE": "Reliance Industries",
     "TCS": "TCS Tata Consultancy",
     "INFY": "Infosys",
