@@ -80,7 +80,7 @@ def _download(yticker: str, days: int) -> pd.DataFrame:
     end = datetime.today()
     start = end - timedelta(days=days + 5)
     try:
-        df = yf.download(yticker, start=start, end=end, progress=False, auto_adjust=True, timeout=15)
+        df = yf.download(yticker, start=start, end=end, progress=False, auto_adjust=False)
         if df.empty:
             return pd.DataFrame()
         df = df.reset_index()

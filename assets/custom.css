@@ -1,0 +1,28 @@
+/* Force input text to be white */
+#ticker-input {
+    color: #FFFFFF !important;
+    background-color: #1A2035 !important;
+    caret-color: #00D4AA !important;
+    border: 1px solid #2D3A52 !important;
+}
+
+#ticker-input::placeholder {
+    color: #6B7A99 !important;
+    opacity: 1 !important;
+}
+
+#ticker-input:focus {
+    border-color: #00D4AA !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(0,212,170,0.15) !important;
+}
+
+/* Nuclear option - all text inputs white */
+input, input[type="text"] {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+
+body {
+    background-color: #0B0F1A !important;
+}

@@ -37,18 +37,6 @@ dash_app = dash.Dash(
     title="SentiFi — Indian Market Intelligence",
 )
 
-# Global CSS to fix input text visibility and button hover
-dash_app.index_string = dash_app.index_string.replace(
-    "</head>",
-    """<style>
-    #ticker-input { color: #FFFFFF !important; background-color: #1A2035 !important; caret-color: #00D4AA !important; border: 1px solid #2D3A52 !important; }
-    #ticker-input::placeholder { color: #4A5568 !important; opacity: 1 !important; }
-    #ticker-input:focus { border-color: #00D4AA !important; outline: none !important; box-shadow: 0 0 0 2px rgba(0,212,170,0.2) !important; }
-    input[type=text] { color: #FFFFFF !important; }
-    body { background-color: #0B0F1A !important; }
-    * { box-sizing: border-box; }
-    </style></head>"""
-)
 
 CARD_STYLE = {
     "backgroundColor": "#131720",
