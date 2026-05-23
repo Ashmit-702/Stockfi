@@ -9,6 +9,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 
 # Known Indian tickers on NSE
+# Any ticker not in this set will still try .NS suffix automatically
 INDIAN_TICKERS = {
     "RELIANCE", "TCS", "INFY", "HDFCBANK", "WIPRO",
     "TATAMOTORS", "ADANIENT", "BAJFINANCE", "SBIN", "ICICIBANK",
@@ -21,29 +22,42 @@ INDIAN_TICKERS = {
     "TITAN", "ASIANPAINT", "PIDILITIND", "BERGEPAINT", "WHIRLPOOL",
     "ULTRACEMCO", "AMBUJACEM", "ACC", "SHREECEM", "DALMIA",
     "HDFC", "BAJAJFINSV", "SBILIFE", "HDFCLIFE", "ICICIGI",
-    "NIFTY", "BANKNIFTY", "SENSEX",
+    "ZOMATO", "NYKAA", "PAYTM", "POLICYBZR", "IRCTC",
+    "DMART", "TRENT", "JUBLFOOD", "INDIGO", "SPICEJET",
+    "PNB", "BANKBARODA", "CANBK", "UNIONBANK", "IDFCFIRSTB",
+    "RECLTD", "PFC", "IREDA", "NHPC", "SJVN",
+    "HAL", "BEL", "BHEL", "BEML", "COCHINSHIP",
+    "MRF", "APOLLOTYRE", "BALKRISIND", "CEATLTD",
+    "PIDILITIND", "ASIANPAINT", "BERGERPAINTS",
+}
+
+# Ticker name aliases — maps common search terms to NSE symbols
+TICKER_ALIASES = {
+    "NATIONALALU": "NATIONALUM",
+    "NALU": "NATIONALUM",
+    "STATEBANKOFIN": "SBIN",
+    "STATEBANK": "SBIN",
+    "TATASTL": "TATASTEEL",
+    "BAJAJFIN": "BAJFINANCE",
+    "HDFCBK": "HDFCBANK",
+    "ICICI": "ICICIBANK",
 }
 
 
 def normalize_ticker(ticker: str) -> str:
-    """
-    Auto-append .NS for Indian stocks.
-    If ticker already has a suffix (.NS/.BO), keep it.
-    If it's a known Indian ticker, add .NS.
-    Otherwise try with .NS first (works for most NSE stocks).
-    """
     t = ticker.upper().strip()
+    # Apply aliases
+    t = TICKER_ALIASES.get(t, t)
     if "." in t:
-        return t  # already has exchange suffix
+        return t
     if t in INDIAN_TICKERS:
         return f"{t}.NS"
-    # For unknown tickers, try .NS first (most Indian stocks are on NSE)
-    # Return as-is and let get_price_history handle fallback
     return t
 
 
 def get_price_history(ticker: str, days: int = 30) -> pd.DataFrame:
     t = ticker.upper().strip()
+    t = TICKER_ALIASES.get(t, t)  # resolve aliases
 
     # Build list of tickers to try in order
     if "." in t:
@@ -51,7 +65,7 @@ def get_price_history(ticker: str, days: int = 30) -> pd.DataFrame:
     elif t in INDIAN_TICKERS:
         candidates = [f"{t}.NS", f"{t}.BO"]
     else:
-        # Unknown ticker - try NSE first, then BSE, then as-is (US stocks)
+        # Unknown ticker — try NSE, BSE, then as-is (for US stocks like AAPL)
         candidates = [f"{t}.NS", f"{t}.BO", t]
 
     for yticker in candidates:

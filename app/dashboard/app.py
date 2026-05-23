@@ -103,7 +103,7 @@ dash_app.layout = html.Div(
                 html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center"}, children=[
                     dcc.Input(
                         id="ticker-input",
-                        placeholder="Enter ticker symbol  —  RELIANCE · TCS · INFY · HDFCBANK · AAPL",
+                        placeholder="Ticker symbol: RELIANCE, TCS, HDFCBANK, NATIONALUM, AAPL...",
                         type="text",
                         style={
                             "flex": "1",
