@@ -178,4 +178,4 @@ SentiFi is for **educational purposes only**. It is not financial advice. Never 
 
 ## 👤 Author
 
-**Ashmit Vijay Singh** — [LinkedIn](#) | [GitHub](#)
+**Ashmit Vijay Singh** — https://www.linkedin.com/in/ashmitvsingh/[LinkdIn]
